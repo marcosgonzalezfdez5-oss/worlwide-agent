@@ -15,6 +15,7 @@ app = Flask(__name__, static_folder="static")
 _client: OpenAI | None = None
 _messages: list[dict] = []
 _pending_location: bool = False
+_orchestrator: "OrchestratorAgent | None" = None
 
 
 def load_env_file(path: str = "key.env") -> None:
@@ -177,56 +178,11 @@ class TimeSubAgent:
         }
 
 
-def is_current_conditions_request(message: str) -> bool:
-    text = message.lower()
-    keywords = {"temperature", "weather", "humidity", "current conditions", "forecast", "time"}
-    return any(keyword in text for keyword in keywords)
-
-
-def extract_location(message: str) -> str:
-    text = message.strip()
-    lower_text = text.lower()
-    for marker in (" in ", " for ", " at "):
-        idx = lower_text.rfind(marker)
-        if idx != -1:
-            return clean_location_query(text[idx + len(marker):])
-    return ""
-
-
 def split_locations(location_text: str) -> list[str]:
     normalized = clean_location_query(location_text)
     normalized = re.sub(r"\s+(and|&)\s+", ",", normalized, flags=re.IGNORECASE)
     parts = re.split(r"[,;]+", normalized)
     return [clean_location_query(p) for p in parts if clean_location_query(p)]
-
-
-def get_weather_data(location_text: str) -> list[dict]:
-    locations = split_locations(location_text)
-    results = []
-    weather_agent = WeatherSubAgent()
-    time_agent = TimeSubAgent()
-    for location in locations:
-        try:
-            weather = weather_agent.run(location)
-            time_info = {
-                "current_time": weather.get("current_time"),
-                "timezone": weather.get("timezone"),
-            }
-            if not time_info["current_time"]:
-                time_info = time_agent.run(weather["latitude"], weather["longitude"])
-            results.append({
-                "location": weather["location"] or location,
-                "temperature_c": weather["temperature_c"],
-                "temperature_f": weather["temperature_f"],
-                "weather_type": weather["weather_type"],
-                "humidity_percent": weather["humidity_percent"],
-                "current_time": time_info["current_time"],
-                "timezone": time_info["timezone"],
-                "error": None,
-            })
-        except (HTTPError, URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError) as err:
-            results.append({"location": location, "error": str(err)})
-    return results
 
 
 def weather_to_text(data: list[dict]) -> str:
@@ -245,6 +201,118 @@ def weather_to_text(data: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
+class CurrentConditionsAgent:
+    """Delegates current city data retrieval to weather and time sub-agents."""
+
+    def __init__(self, weather_agent: WeatherSubAgent, time_agent: TimeSubAgent) -> None:
+        self.weather_agent = weather_agent
+        self.time_agent = time_agent
+
+    def run(self, location_text: str) -> list[dict]:
+        locations = split_locations(location_text)
+        results = []
+
+        for location in locations:
+            results.append(self._get_city_conditions(location))
+
+        return results
+
+    def _get_city_conditions(self, location: str) -> dict:
+        try:
+            weather = self.weather_agent.run(location)
+            time_info = {
+                "current_time": weather.get("current_time"),
+                "timezone": weather.get("timezone"),
+            }
+
+            if not time_info["current_time"]:
+                time_info = self.time_agent.run(weather["latitude"], weather["longitude"])
+
+            return {
+                "location": weather["location"] or location,
+                "temperature_c": weather["temperature_c"],
+                "temperature_f": weather["temperature_f"],
+                "weather_type": weather["weather_type"],
+                "humidity_percent": weather["humidity_percent"],
+                "current_time": time_info["current_time"],
+                "timezone": time_info["timezone"],
+                "error": None,
+            }
+        except (HTTPError, URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError) as err:
+            return {"location": location, "error": str(err)}
+
+
+class OrchestratorAgent:
+    """Main agent that decides whether to answer directly or use sub-agents."""
+
+    def __init__(self, current_conditions_agent: CurrentConditionsAgent) -> None:
+        self.current_conditions_agent = current_conditions_agent
+
+    def handle(self, user_message: str, messages: list[dict], pending_location: bool) -> tuple[dict, bool]:
+        if pending_location:
+            weather_data = self.current_conditions_agent.run(user_message)
+            self._remember(messages, user_message, weather_to_text(weather_data))
+            return {"type": "weather", "data": weather_data}, False
+
+        if self._is_current_conditions_request(user_message):
+            location = self._extract_location(user_message)
+
+            if not location:
+                reply = "Which city or location should I check right now?"
+                self._remember(messages, user_message, reply)
+                return {"type": "text", "content": reply}, True
+
+            weather_data = self.current_conditions_agent.run(location)
+            self._remember(messages, user_message, weather_to_text(weather_data))
+            return {"type": "weather", "data": weather_data}, False
+
+        messages.append({"role": "user", "content": user_message})
+        reply = self._ask_llm(messages)
+        messages.append({"role": "assistant", "content": reply})
+
+        if reply.startswith(("API error:", "API key", "Rate limit")):
+            return {"type": "error", "content": reply}, False
+
+        return {"type": "text", "content": reply}, False
+
+    @staticmethod
+    def _remember(messages: list[dict], user_message: str, agent_message: str) -> None:
+        messages.append({"role": "user", "content": user_message})
+        messages.append({"role": "assistant", "content": agent_message})
+
+    @staticmethod
+    def _is_current_conditions_request(message: str) -> bool:
+        text = message.lower()
+        keywords = {"temperature", "weather", "humidity", "current conditions", "forecast", "time"}
+        return any(keyword in text for keyword in keywords)
+
+    @staticmethod
+    def _extract_location(message: str) -> str:
+        text = message.strip()
+        lower_text = text.lower()
+
+        for marker in (" in ", " for ", " at "):
+            idx = lower_text.rfind(marker)
+            if idx != -1:
+                return clean_location_query(text[idx + len(marker):])
+
+        return ""
+
+    @staticmethod
+    def _ask_llm(messages: list[dict]) -> str:
+        try:
+            client = get_ai_client()
+            response = client.chat.completions.create(model="speed", messages=messages)
+        except AuthenticationError:
+            return "API key rejected. Check PARALLEL_API_KEY in key.env."
+        except RateLimitError:
+            return "Rate limit reached. Please try again later."
+        except OpenAIError as err:
+            return f"API error: {err}"
+
+        return response.choices[0].message.content or ""
+
+
 def get_ai_client() -> OpenAI:
     global _client
     if _client is None:
@@ -254,6 +322,20 @@ def get_ai_client() -> OpenAI:
             base_url="https://api.parallel.ai",
         )
     return _client
+
+
+def get_orchestrator() -> OrchestratorAgent:
+    global _orchestrator
+
+    if _orchestrator is None:
+        _orchestrator = OrchestratorAgent(
+            current_conditions_agent=CurrentConditionsAgent(
+                weather_agent=WeatherSubAgent(),
+                time_agent=TimeSubAgent(),
+            )
+        )
+
+    return _orchestrator
 
 
 @app.route("/")
@@ -277,42 +359,13 @@ def chat():
             "content": "You are my first world agent. Be concise, curious, and helpful.",
         }]
 
-    if _pending_location:
-        _pending_location = False
-        weather_data = get_weather_data(user_message)
-        _messages.append({"role": "user", "content": user_message})
-        _messages.append({"role": "assistant", "content": weather_to_text(weather_data)})
-        return jsonify({"type": "weather", "data": weather_data})
+    response_payload, _pending_location = get_orchestrator().handle(
+        user_message=user_message,
+        messages=_messages,
+        pending_location=_pending_location,
+    )
 
-    if is_current_conditions_request(user_message):
-        location = extract_location(user_message)
-        if not location:
-            _pending_location = True
-            reply = "Which city or location should I check right now?"
-            _messages.append({"role": "user", "content": user_message})
-            _messages.append({"role": "assistant", "content": reply})
-            return jsonify({"type": "text", "content": reply})
-        weather_data = get_weather_data(location)
-        _messages.append({"role": "user", "content": user_message})
-        _messages.append({"role": "assistant", "content": weather_to_text(weather_data)})
-        return jsonify({"type": "weather", "data": weather_data})
-
-    _messages.append({"role": "user", "content": user_message})
-
-    try:
-        client = get_ai_client()
-        response = client.chat.completions.create(model="speed", messages=_messages)
-    except AuthenticationError:
-        return jsonify({"type": "error", "content": "API key rejected — check PARALLEL_API_KEY in key.env."})
-    except RateLimitError:
-        return jsonify({"type": "error", "content": "Rate limit reached. Please try again later."})
-    except OpenAIError as err:
-        return jsonify({"type": "error", "content": f"API error: {err}"})
-
-    reply = response.choices[0].message.content or ""
-    _messages.append({"role": "assistant", "content": reply})
-    return jsonify({"type": "text", "content": reply})
-
+    return jsonify(response_payload)
 
 @app.route("/api/reset", methods=["POST"])
 def reset():
