@@ -4,66 +4,86 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>World Agent</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <div class="app">
+  <div class="layout">
 
-    <header class="header">
-      <div class="header-left">
-        <div class="logo">
-          <i class="fa-solid fa-globe"></i>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-brand">
+          <div class="brand-icon"><i class="fa-solid fa-globe"></i></div>
+          <span class="brand-name">World Agent</span>
         </div>
-        <div class="header-text">
-          <h1>World Agent</h1>
-          <span class="status"><span class="status-dot"></span>Online</span>
+        <button class="new-chat-btn" id="resetBtn">
+          <i class="fa-solid fa-plus"></i>
+          New chat
+        </button>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="online-badge">
+          <span class="online-dot"></span>
+          <span>Connected</span>
         </div>
       </div>
-      <button class="reset-btn" id="resetBtn" title="New conversation">
-        <i class="fa-solid fa-rotate-right"></i>
-      </button>
-    </header>
+    </aside>
 
-    <main class="messages" id="messages">
-      <div class="welcome">
-        <div class="welcome-icon">
-          <i class="fa-solid fa-globe"></i>
-        </div>
-        <h2>Hello, I'm World Agent</h2>
-        <p>Ask me anything — weather conditions, time zones, or just chat.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-msg="Weather in Tokyo">
-            <i class="fa-solid fa-sun"></i> Weather in Tokyo
-          </button>
-          <button class="suggestion" data-msg="What time is it in London?">
-            <i class="fa-solid fa-clock"></i> Time in London
-          </button>
-          <button class="suggestion" data-msg="Tell me something interesting about the world">
-            <i class="fa-solid fa-earth-americas"></i> Fun world fact
-          </button>
+    <!-- Main -->
+    <main class="main">
+
+      <div class="messages-area" id="messages">
+        <div class="welcome" id="welcome">
+          <div class="welcome-icon"><i class="fa-solid fa-globe"></i></div>
+          <h1>How can I help you today?</h1>
+          <p>Ask about weather, time, or anything on your mind.</p>
+          <div class="chips">
+            <button class="chip" data-msg="What's the weather in Tokyo?">
+              <i class="fa-solid fa-cloud-sun"></i>
+              <span>Weather in Tokyo</span>
+            </button>
+            <button class="chip" data-msg="What time is it in New York?">
+              <i class="fa-solid fa-clock"></i>
+              <span>Time in New York</span>
+            </button>
+            <button class="chip" data-msg="Compare weather in London and Paris">
+              <i class="fa-solid fa-earth-europe"></i>
+              <span>Compare cities</span>
+            </button>
+            <button class="chip" data-msg="Tell me something fascinating about the world">
+              <i class="fa-solid fa-lightbulb"></i>
+              <span>Fun world fact</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      <div class="input-zone">
+        <div class="input-inner">
+          <form id="chatForm">
+            <div class="input-box">
+              <textarea
+                id="messageInput"
+                placeholder="Message World Agent…"
+                rows="1"
+                autocomplete="off"
+              ></textarea>
+              <button type="submit" id="sendBtn" disabled>
+                <i class="fa-solid fa-arrow-up"></i>
+              </button>
+            </div>
+          </form>
+          <p class="disclaimer">World Agent may make mistakes. Verify important information.</p>
+        </div>
+      </div>
+
     </main>
-
-    <footer class="input-area">
-      <form class="input-form" id="inputForm">
-        <div class="input-wrapper">
-          <input
-            type="text"
-            id="messageInput"
-            placeholder="Ask about weather, time, or anything..."
-            autocomplete="off"
-          />
-          <button type="submit" id="sendBtn">
-            <i class="fa-solid fa-paper-plane"></i>
-          </button>
-        </div>
-      </form>
-      <p class="footer-note">World Agent can make mistakes. Verify important information.</p>
-    </footer>
-
   </div>
-  <script src="script.js"></script>
+
+  <script src="/static/script.js"></script>
 </body>
 </html>
