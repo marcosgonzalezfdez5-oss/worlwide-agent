@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>World Agent</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+  <div class="app">
+
+    <header class="header">
+      <div class="header-left">
+        <div class="logo">
+          <i class="fa-solid fa-globe"></i>
+        </div>
+        <div class="header-text">
+          <h1>World Agent</h1>
+          <span class="status"><span class="status-dot"></span>Online</span>
+        </div>
+      </div>
+      <button class="reset-btn" id="resetBtn" title="New conversation">
+        <i class="fa-solid fa-rotate-right"></i>
+      </button>
+    </header>
+
+    <main class="messages" id="messages">
+      <div class="welcome">
+        <div class="welcome-icon">
+          <i class="fa-solid fa-globe"></i>
+        </div>
+        <h2>Hello, I'm World Agent</h2>
+        <p>Ask me anything — weather conditions, time zones, or just chat.</p>
+        <div class="suggestions">
+          <button class="suggestion" data-msg="Weather in Tokyo">
+            <i class="fa-solid fa-sun"></i> Weather in Tokyo
+          </button>
+          <button class="suggestion" data-msg="What time is it in London?">
+            <i class="fa-solid fa-clock"></i> Time in London
+          </button>
+          <button class="suggestion" data-msg="Tell me something interesting about the world">
+            <i class="fa-solid fa-earth-americas"></i> Fun world fact
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <footer class="input-area">
+      <form class="input-form" id="inputForm">
+        <div class="input-wrapper">
+          <input
+            type="text"
+            id="messageInput"
+            placeholder="Ask about weather, time, or anything..."
+            autocomplete="off"
+          />
+          <button type="submit" id="sendBtn">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </div>
+      </form>
+      <p class="footer-note">World Agent can make mistakes. Verify important information.</p>
+    </footer>
+
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
