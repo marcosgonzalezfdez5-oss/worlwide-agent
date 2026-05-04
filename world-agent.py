@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -103,6 +104,13 @@ def extract_location(message: str) -> str:
     return ""
 
 
+def split_locations(location_text: str) -> list[str]:
+    normalized = re.sub(r"\s+(and|&)\s+", ",", location_text, flags=re.IGNORECASE)
+    parts = re.split(r"[,;]+", normalized)
+
+    return [part.strip(" ?.") for part in parts if part.strip(" ?.")]
+
+
 def format_current_conditions(location: str) -> str:
     weather_agent = WeatherSubAgent()
     time_agent = TimeSubAgent()
@@ -121,6 +129,17 @@ def format_current_conditions(location: str) -> str:
         f"- Humidity: {weather['humidity_percent']}%\n"
         f"- Weather observation time: {weather['observation_time']}"
     )
+
+
+def format_current_conditions_for_locations(location_text: str) -> str:
+    locations = split_locations(location_text)
+
+    if not locations:
+        return "Please tell me which city or location to check."
+
+    reports = [format_current_conditions(location) for location in locations]
+
+    return "\n\n".join(reports)
 
 
 def main() -> None:
@@ -154,7 +173,7 @@ def main() -> None:
         if pending_current_conditions_location:
             location = user_message
             pending_current_conditions_location = False
-            agent_message = format_current_conditions(location)
+            agent_message = format_current_conditions_for_locations(location)
             messages.append({"role": "user", "content": user_message})
             messages.append({"role": "assistant", "content": agent_message})
             print(f"Agent: {agent_message}")
@@ -171,7 +190,7 @@ def main() -> None:
                 print(f"Agent: {agent_message}")
                 continue
 
-            agent_message = format_current_conditions(location)
+            agent_message = format_current_conditions_for_locations(location)
             messages.append({"role": "user", "content": user_message})
             messages.append({"role": "assistant", "content": agent_message})
             print(f"Agent: {agent_message}")
